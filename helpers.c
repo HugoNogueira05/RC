@@ -188,6 +188,7 @@ int expectUA(int timeout) {
             break;
         }
     }
+    return 0;
 }
 
 int initiateSenderProtocol(int timeout, int maxRetries) {
