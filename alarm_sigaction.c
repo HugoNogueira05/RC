@@ -4,13 +4,8 @@
 // Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
 //              Rui Prior [rcprior@fc.up.pt]
 
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 
-#define FALSE 0
-#define TRUE 1
+#include "helpers.h" 
 
 int alarmEnabled = FALSE;
 int alarmCount = 0;

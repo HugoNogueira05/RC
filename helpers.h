@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <termios.h>
+#include <signal.h>
 #include <unistd.h>
 
 // Open and configure the serial port.
