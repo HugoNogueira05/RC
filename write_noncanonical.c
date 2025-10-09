@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
     // The whole buffer must be sent even with the '\n'.
     buf[5] = '\n';
 
-    int bytes = writeBytesSerialPort(buf, BUF_SIZE);
+    int bytes = initiateSenderProtocol(2 , 3);
     printf("%d bytes written to serial port\n", bytes);
 
     // Wait until all bytes have been written to the serial port
