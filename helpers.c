@@ -121,7 +121,7 @@ int sendSupervisionFrame()
         perror("failed to write supervision frame");
         return -1;
     }
-
+    return bytes;
 }
 
 void UAalarmHandler(int signal)
