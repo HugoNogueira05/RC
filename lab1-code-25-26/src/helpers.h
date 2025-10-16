@@ -24,15 +24,16 @@ int closeSerialPort();
 // Must check whether a byte was actually received from the return value.
 // Save the received byte in the "byte" pointer.
 // Returns -1 on error, 0 if no byte was received, 1 if a byte was received.
-int readByteSerialPort(unsigned char *byte);
-
+ int readByteSerialPort(unsigned char *byte);
 // Write up to numBytes from the "bytes" array to the serial port.
 // Must check how many were actually written in the return value.
 // Returns -1 on error, otherwise the number of bytes written.
-int writeBytesSerialPort(const unsigned char *bytes, int nBytes);
+ int writeBytesSerialPort(const unsigned char *bytes, int nBytes);
 
 int sendSupervisionFrame();
 
 int initiateSenderProtocol(int timeout, int maxRetries);
+
+int expectSupervisionFrame();
 
 #endif

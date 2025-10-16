@@ -56,10 +56,10 @@ int main(int argc, char *argv[])
 
         printf("Byte received: %x\n", byte);
 
-        if (byte == FLAG)
+        if (expectSupervisionFrame() == 0)
         {
             printf("Received flag char. Responding.\n");
-            unsigned char response[5] = {FLAG, 0x03, 0x00, 0x03, FLAG};
+            unsigned char response[5] = {FLAG, 0x03, 0x07, 0x04, FLAG};
             writeBytesSerialPort(response, 5);
             STOP = TRUE;
         }
