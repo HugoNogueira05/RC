@@ -153,13 +153,17 @@ int expectUA(int timeout) {
             perror("readByteSerialPort");
             return -1;
         }
+        printf("Byte read: %02X\n", byte);
         switch (UAstate)
         {
         case START:
-            if (byte == FLAG) UAstate = FLAG_RCV;
+            if (byte == FLAG) {
+            UAstate = FLAG_RCV;
+            printf("FLAG received\n");
+            }
             break;
         case FLAG_RCV:
-            if (byte == RECEIVER_ADDRESS) UAstate = A_RCV;
+            if (byte == RECEIVER_ACK_ADDRESS) UAstate = A_RCV;
             else if (byte != FLAG) UAstate = START;
             break;
         case A_RCV:
@@ -168,7 +172,7 @@ int expectUA(int timeout) {
             else UAstate = START;
             break;
         case C_RCV:
-            if (byte == (RECEIVER_ADDRESS ^ CONTROL_UA)) UAstate = BCC_OK;
+            if (byte == (RECEIVER_ACK_ADDRESS ^ CONTROL_UA)) UAstate = BCC_OK;
             else if (byte == FLAG) UAstate = FLAG_RCV;
             else UAstate = START;
             break;
