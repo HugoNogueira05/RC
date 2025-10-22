@@ -151,9 +151,42 @@ int llread(unsigned char *packet)
 ////////////////////////////////////////////////
 // LLCLOSE        // error handling
 ////////////////////////////////////////////////
-int llclose()
+int llclose(LinkLayer & connectionParameters)
 {
     // TODO: Implement this function
+
+    if (connectionParameters.role == LlRx){
+        if (expectDISC() < 0){
+            perror("expectDISC");
+        }
+        if (expectUA(connectionParameters.timeout) < 0){
+            perror("expectUA");
+        }
+
+        if (closeSerialPort()<0){
+            perror("closeSerialPort\n");
+            exit(-1);
+        }
+    }
+
+    if (connectionParameters.role == LlTx){
+        if (sendDisconnect(SENDER_ADDRESS)<0)
+            perror("sendDisconnect");
+        if (expectDISC()<0)
+            perror("expectDISC");
+        else {
+            unsigned char ua[5] = {FLAG, SENDER_ADDRESS, CONTROL_UA, (unsigned char)(SENDER_ADDRESS^CONTROL_UA), FLAG};
+            if (writeBytesSerialPort(ua) < 0)
+                perror("writeBytesSerialPort (UA)");
+        }
+
+        if (closeSerialPort() < 0){
+            perror("closeSerialPort");
+            exit(-1);
+        }
+
+        printf("Port %s closed\n", connectionParameters.serialPort);
+    }
 
     return 0;
 }

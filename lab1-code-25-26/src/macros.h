@@ -17,6 +17,7 @@
 #define INFO_FRAME_1 0x80
 #define RR 0xAA
 #define REJ 0x54
+#define CONTROL_DISC 0x0B
 
 // serial port config
 #define _POSIX_SOURCE 1 // POSIX compliant source

@@ -46,5 +46,9 @@ bool calculateBCC2(const unsigned char* data, int dataSize);
 bool waitWriteResponse(bool framenum);
 
 unsigned int bytedestuff(unsigned char* data , unsigned int dataSize , unsigned char* newData);
+// Sends a DISC signal from TX or RX
+int sendDisconnect(unsigned char *ADD);
+
+int expectDISC();
 
 #endif
