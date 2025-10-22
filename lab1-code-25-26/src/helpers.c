@@ -6,6 +6,8 @@
 enum State{ START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, STOP, TIMEOUT };
 enum State UAstate = START;
 
+
+
 // int openSerialPort(const char *serialPort, int baudRate)
 // {
 //     // Open with O_NONBLOCK to avoid hanging when CLOCAL
@@ -250,6 +252,123 @@ int expectSupervisionFrame(){
     return 0;
 }
 
+
+//Generates an information frame and returns its size
+int generateInformationFrame(const unsigned char *data, bool frameNumber, unsigned int size, unsigned char* message){ //framenumber is a bool because it is only between zero and 1 and we can save some bits
+    unsigned char* newData;
+    int dataSize = bytestuff(data , newData, size);
+    message[0] = FLAG;
+    message[1] = SENDER_ADDRESS;
+    if(frameNumber == 0){
+        message[2] = INFO_FRAME_0;
+    } else {
+        message[2] = INFO_FRAME_1;
+    }
+    message[3] = message[1] ^ message[2];
+    memcpy(&message[4], newData, dataSize);
+    message[4 + dataSize] = calculateBCC2(newData, dataSize);
+    message[5 + dataSize] = FLAG;
+    return 6+dataSize;
+}
+
+unsigned int bytestuff(const unsigned char* data, unsigned char* stuffedData, unsigned int size){
+    int j = 0;
+    for(int i = 0; i < size; i++){
+        if(data[i] == FLAG){ // Swap 0x7E with 0x7D 0x5E
+            stuffedData[j++] = 0x7D;
+            stuffedData[j++] = 0x5E;
+        } else if(data[i] == 0x7D){ //Swap 0x7D with 0x7D 0x5D
+            stuffedData[j++] = 0x7D;
+            stuffedData[j++] = 0x5D;
+        } else {
+            stuffedData[j++] = data[i];
+        }
+    }
+    stuffedData[j] = '\0';
+    return j;
+}
+
+int calculateBCC2(const unsigned char* data, int dataSize){
+    unsigned char bcc2 = 0x00;
+    for(int i = 0; i < dataSize; i++){
+        bcc2 ^= data[i];
+    }
+    return bcc2;
+}
+
+bool waitWriteResponse(bool frameNum){
+    enum responseState {START, FLAG_RCV, A_RCV, CONTROL_RCV, BCC1_OK , END};
+    enum responseState state = START;
+    unsigned char byte;
+    bool rejected;
+    unsigned int messageCounter = 0;
+    while (state != END || messageCounter < 7) //The message size is supposed to be 5 we give 2 of buffer
+    {
+        readByteSerialPort(&byte);
+        messageCounter++;
+        switch (state)
+        {
+        case START:
+            if (byte == FLAG) state = FLAG_RCV;
+            break;
+        case FLAG_RCV:
+            if (byte == RECEIVER_ACK_ADDRESS) state = A_RCV;
+            else if (byte != FLAG) state = START;
+            break;
+        case A_RCV:
+            if (byte == FLAG) state = FLAG_RCV;
+            else if (byte == RR + frameNum) {
+                state = CONTROL_RCV;
+                rejected = false;
+            } 
+            else if (byte == REJ +frameNum){
+                state = CONTROL_RCV;
+                rejected = true;
+            }
+            else{
+                state = START;
+            }
+            break;
+        case CONTROL_RCV:
+            if (byte == FLAG) state = FLAG_RCV;
+            else if (byte == SENDER_ACK_ADDRESS ^ rejected ? REJ+frameNum : RR+frameNum) state = BCC1_OK;
+            else state = START;
+            break;
+        case BCC1_OK:
+            if (byte == FLAG) state = END;
+            else state = START;
+            break;
+        }
+    }
+        if (rejected || messageCounter >= 7){
+            return 0;
+        }
+        return 1;
+}
+
+
+unsigned int bytedestuff(unsigned char* data , unsigned int dataSize , unsigned char* newData){
+    unsigned int j = 0;
+    for (unsigned int i = 0; i < dataSize ; i++){
+        if (data[i] == 0x7D){
+            if (data[i++] == 0x5E){ // convert to 0x7E
+                newData[j] = 0X7E;
+            }
+            else if(data[i++] == 0x5D){ // convert to 0x7D
+                newData[j] = 0x7D;
+            }
+            else{
+                perror("Error in destuffing");
+                exit(-1);
+            }
+        }
+        else{
+            newData[j] = data[i];
+        }
+        j++;
+    }
+    return j;
+}
 int sendDisconnect(unsigned char ADD){
 
     unsigned char disc[5] = {FLAG, ADD, CONTROL_DISC, (unsigned char)(ADD^CONTROL_DISC), FLAG};
