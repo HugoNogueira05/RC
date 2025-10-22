@@ -249,3 +249,65 @@ int expectSupervisionFrame(){
     }
     return 0;
 }
+
+int sendDisconnect(unsigned char ADD){
+
+    unsigned char disc[5] = {FLAG, ADD, CONTROL_DISC, (unsigned char)(ADD^CONTROL_DISC), FLAG};
+    int bytes = writeBytesSerialPort(disc, 5);
+    if (bytes <= 0)
+    {
+        perror("failed to write supervision frame");
+        return -1;
+    }
+    return bytes;
+}
+
+int expectDISC(){
+    enum State state = START;
+    unsigned char byte;
+    unsigned char receivedADD = 0;
+
+    while(state != STOP){
+        if(readByteSerialPort(&byte) < 0){
+            perror("readByteSerialPort");
+            return -1;
+        }
+        printf("Byte read: %02X\n", byte);
+        switch(state){
+            case START:
+                if(byte == FLAG) state = FLAG_RCV;
+                break;
+            case FLAG_RCV:
+                if(byte == SENDER_ADDRESS || byte == RECEIVER_ADDRESS){ 
+                    receivedADD = byte;
+                    state = A_RCV;
+                }
+                else if (byte != FLAG) state = START;
+                break;
+            case A_RCV:
+                if(byte == CONTROL_DISC) state = C_RCV;
+                else if(byte == FLAG) state = FLAG_RCV;
+                else state = START;
+                break;
+            case C_RCV:
+                if(byte == receivedADD ^ CONTROL_DISC) state = BCC_OK;
+                else if(byte == FLAG) state = FLAG_RCV;
+                else state = START;
+                break;
+            case BCC_OK:
+                if(byte == FLAG){ state = STOP;
+                    if (receivedADD == SENDER_ADDRESS){
+                        if (sendDisconnect(RECEIVER_ADDRESS) < 0){
+                            perror("sendDisconnect (RX response)");
+                            return -1;
+                        }
+                    }
+                }
+                else state = START;
+                break;
+            default:
+                break;
+        }
+    }
+    return 0;
+}

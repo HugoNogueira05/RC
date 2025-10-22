@@ -36,4 +36,9 @@ int initiateSenderProtocol(int timeout, int maxRetries);
 
 int expectSupervisionFrame();
 
+// Sends a DISC signal from TX or RX
+int sendDisconnect(unsigned char *ADD);
+
+int expectDISC();
+
 #endif
