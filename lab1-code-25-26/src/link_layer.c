@@ -4,6 +4,9 @@
 #include "serial_port.h"
 #include "helpers.h"
 
+extern volatile bool frameNumber = FALSE;
+
+
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
 
@@ -17,7 +20,7 @@ int llopen(LinkLayer connectionParameters)
         if (openSerialPort(connectionParameters.serialPort, connectionParameters.baudRate) < 0)
         {
             perror("openSerialPort");
-            exit(-1);
+            return -1;
         }
 
         printf("Serial port %s opened\n", connectionParameters.serialPort);
@@ -29,11 +32,11 @@ int llopen(LinkLayer connectionParameters)
     else if (connectionParameters.role == LlRx){
         // Receiver
 
-        volatile int STOP = FALSE;
+        volatile bool STOP = FALSE;
         if (openSerialPort(connectionParameters.serialPort, connectionParameters.baudRate) < 0)
         {
             perror("openSerialPort");
-            exit(-1);
+            return -1;
         }
 
         printf("Serial port %s opened\n", connectionParameters.serialPort);
@@ -60,26 +63,93 @@ int llopen(LinkLayer connectionParameters)
 
 ////////////////////////////////////////////////
 // LLWRITE
+// return number of bytes written or negative in case of error
+// buf - data to be sent  
+// bufSize - size of data to be sent
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
-    // TODO: Implement this function
-
-    return 0;
+    unsigned char message[BUF_SIZE]; // we assume that BUF_SIZE is at least double the maxsize of bufSize in case of worst case bytestuffing
+    unsigned int newSize = generateInformationFrame(buf, frameNumber, bufSize, message);
+    frameNumber = !frameNumber;
+    int sentBytes = writeBytesSerialPort(message, newSize);
+    if (sentBytes <= 0){
+        return -1;
+    }
+    if(waitWriteResponse(frameNumber) == 0){ // 0 if rej , 1 if rr 
+        return llwrite(buf, bufSize); // This locks us in an infinite loop until we successfully send the message, maybe switch this to have maxtries?
+    }
+    return sentBytes;
 }
 
 ////////////////////////////////////////////////
 // LLREAD
+// Packet : Array of bytes read
+// return: array lenght or negative in case of error
 ////////////////////////////////////////////////
 int llread(unsigned char *packet)
-{
-    // TODO: Implement this function
-
-    return 0;
+{   
+    enum readState { START, FLAG_RCV, A_RCV, C_RCV , BCC1_OK, DATA_RCV, BCC2_OK, STOP_READ };
+    enum readState readState = START;
+    unsigned int packetIter = 0;
+    unsigned char* dataBuffer;
+    int dataBufferIter = 0; 
+    unsigned char byte;
+    unsigned int packetSize = strlen(packet);
+    while (readState != STOP_READ || packetIter < packetSize){
+        byte = packet[packetIter];
+        switch (readState){
+            case START:
+                if(byte == FLAG) readState = FLAG_RCV;
+                break;
+            case FLAG_RCV:
+                if(byte == SENDER_ADDRESS) readState = A_RCV;
+                else if(byte != FLAG) readState = START;
+                break;
+            case A_RCV: // Como saber se o number frame é o correto?
+                if (byte == INFO_FRAME_0 || byte == INFO_FRAME_1) readState = C_RCV;
+                else if(byte == FLAG) readState = FLAG_RCV;
+                else readState = START;
+                break;
+            case C_RCV:
+                if(byte == SENDER_ADDRESS ^INFO_FRAME_0 || byte == SENDER_ADDRESS ^INFO_FRAME_1) readState = BCC1_OK;
+                else if(byte == FLAG) readState = FLAG_RCV;
+                else readState = START;
+                break;
+            case BCC1_OK:
+                if(byte == FLAG) readState = FLAG_RCV;
+                else {
+                    dataBuffer[dataBufferIter] = byte;
+                    dataBufferIter++;
+                    readState = DATA_RCV;
+                }
+                break;
+            case DATA_RCV:
+                if(byte == calculateBCC2(dataBuffer, dataBufferIter)) readState = BCC2_OK;
+                else if (byte == FLAG) readState = FLAG_RCV;
+                else {
+                    dataBuffer[dataBufferIter] = byte;
+                    dataBufferIter++;
+                }
+                break;
+            case BCC2_OK:
+                if(byte == FLAG) readState = STOP_READ;
+                else readState = START;
+                break;
+        packetIter++;
+        }
+    }
+    if (readState != STOP_READ){ //stopped because buffer ran out which means failed
+        return -1; // send rej message here or in application layer?
+    }
+    unsigned char* finalMessage; 
+    unsigned int finalMessageSize = bytedestuff(dataBuffer, dataBufferIter , finalMessage);
+    memcpy(packet, finalMessage, finalMessageSize);
+    return finalMessageSize;
 }
 
 ////////////////////////////////////////////////
-// LLCLOSE
+// LLCLOSE        // error handling
 ////////////////////////////////////////////////
 int llclose()
 {
