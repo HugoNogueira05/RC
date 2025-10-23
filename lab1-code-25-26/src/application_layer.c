@@ -18,5 +18,14 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         connectionParameters.role = LlTx;
     else if (strcmp(role, "rx") == 0)
         connectionParameters.role = LlRx;
-    llopen(connectionParameters);
+    llopen(connectionParameters); // works
+    if (strcmp(role,"tx") == 0){
+        FILE* file = fopen(filename , "r");
+        
+        fread()
+    }
+    if (strcmp(role,"rx") == 0){
+        FILE* file = fopen(filename , "w+");
+
+    }
 }

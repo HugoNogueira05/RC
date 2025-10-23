@@ -3,7 +3,7 @@
 // int fd = -1;           // File descriptor for open serial port
 // struct termios oldtio; // Serial port settings to restore on closing
 
-enum State{ START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, STOP, TIMEOUT };
+enum State{ START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, TIMEOUT };
 enum State UAstate = START;
 
 enum State frameState = START;
@@ -168,7 +168,7 @@ int expectUA(int timeout) {
     /*
     Create a state machine to verify the UA frame, if it misses we retransmit the SET frame
     */
-    while (UAstate != STOP) {
+    while (UAstate != TIMEOUT) {
         if (readByteSerialPort(&byte) < 0) {
             perror("readByteSerialPort");
             return -1;
@@ -197,12 +197,8 @@ int expectUA(int timeout) {
             else UAstate = START;
             break;
         case BCC_OK:
-            if (byte == FLAG) UAstate = STOP;
+            if (byte == FLAG) return 0;
             else UAstate = START;
-            break;
-        case STOP:
-            alarm(0); // disable alarm
-            return 0;
             break;
         case TIMEOUT:
             alarm(0); // disable alarm
@@ -234,18 +230,21 @@ int initiateSenderProtocol(int timeout, int maxRetries) {
 
 int expectSupervisionFrame(int timeout, int maxTries){
     unsigned char byte;
-    FrameAlarmSetup();
+    frameAlarmSetup();
     alarm(timeout);
     int tries = 0;
-    while(frameState != STOP || frameState != TIMEOUT || tries < maxTries){
+    printf("waiting supervision frame");
+    while(frameState != TIMEOUT || tries < maxTries){
         if(readByteSerialPort(&byte) < 0){
             perror("readByteSerialPort");
-            return -1;
         }
         printf("Byte read: %02X\n", byte);
         switch(frameState){
             case START:
-                if(byte == FLAG) frameState = FLAG_RCV;
+                if(byte == FLAG){ 
+                    frameState = FLAG_RCV;
+                    printf("got flag");
+                }
                 break;
             case FLAG_RCV:
                 if(byte == SENDER_ADDRESS) frameState = A_RCV;
@@ -257,17 +256,20 @@ int expectSupervisionFrame(int timeout, int maxTries){
                 else frameState = START;
                 break;
             case C_RCV:
-                if(byte == (SENDER_ADDRESS ^ CONTROL_SET)) frameState = BCC_OK;
+                if(byte == (SENDER_ADDRESS ^ CONTROL_SET)) {frameState = BCC_OK;printf("got bcc , framestate %d" , frameState);}
                 else if(byte == FLAG) frameState = FLAG_RCV;
                 else frameState = START;
                 break;
             case BCC_OK:
-                if(byte == FLAG) frameState = STOP;
+                if(byte == FLAG) {
+                    alarm(0);
+                    return 0;}
                 else frameState = START;
                 break;
             case TIMEOUT:
                 tries++;
-                printf("Timed out while expecting supervision frame");
+                alarm(timeout);
+                printf("Timed");
                 frameState = START;
                 break;
         }
@@ -354,12 +356,14 @@ bool waitWriteResponse(bool frameNum){
             break;
         case CONTROL_RCV:
             if (byte == FLAG) state = FLAG_RCV;
-            else if (byte == SENDER_ACK_ADDRESS ^ rejected ? REJ+frameNum : RR+frameNum) state = BCC1_OK;
+            else if (byte == (SENDER_ACK_ADDRESS ^ rejected) ? REJ+frameNum : RR+frameNum) state = BCC1_OK;
             else state = START;
             break;
         case BCC1_OK:
             if (byte == FLAG) state = END;
             else state = START;
+            break;
+        case END:
             break;
         }
     }
@@ -409,7 +413,7 @@ int expectDISC(){
     unsigned char byte;
     unsigned char receivedADD = 0;
 
-    while(state != STOP){
+    while(state != TIMEOUT){
         if(readByteSerialPort(&byte) < 0){
             perror("readByteSerialPort");
             return -1;
@@ -432,17 +436,18 @@ int expectDISC(){
                 else state = START;
                 break;
             case C_RCV:
-                if(byte == receivedADD ^ CONTROL_DISC) state = BCC_OK;
+                if(byte == (receivedADD ^ CONTROL_DISC)) state = BCC_OK;
                 else if(byte == FLAG) state = FLAG_RCV;
                 else state = START;
                 break;
             case BCC_OK:
-                if(byte == FLAG){ state = STOP;
+                if(byte == FLAG){
                     if (receivedADD == SENDER_ADDRESS){
                         if (sendDisconnect(RECEIVER_ADDRESS) < 0){
                             perror("sendDisconnect (RX response)");
                             return -1;
                         }
+                        return 0;
                     }
                 }
                 else state = START;

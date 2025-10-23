@@ -4,7 +4,7 @@
 #include "serial_port.h"
 #include "helpers.h"
 
-extern volatile bool frameNumber = FALSE;
+volatile bool frameNumber = FALSE;
 LinkLayer globalLinklayer;
 
 
@@ -46,11 +46,11 @@ int llopen(LinkLayer connectionParameters)
 
         while (STOP == FALSE)
         {
-            unsigned char byte;
-            readByteSerialPort(&byte);
-            printf("Byte received: %x\n", byte);
+            // unsigned char byte;
+            // readByteSerialPort(&byte);
+            // printf("Byte received: %x\n", byte);
 
-        if (expectSupervisionFrame() == 0)
+        if (expectSupervisionFrame(connectionParameters.timeout , connectionParameters.nRetransmissions) == 0)
         {
             printf("Received flag char. Responding.\n");
             unsigned char response[5] = {FLAG, 0x03, 0x07, 0x04, FLAG};
@@ -97,7 +97,7 @@ int llread(unsigned char *packet)
     unsigned char* dataBuffer;
     int dataBufferIter = 0; 
     unsigned char byte;
-    unsigned int packetSize = strlen(packet);
+    unsigned int packetSize = strlen(*packet);
     while (readState != STOP_READ || packetIter < packetSize){
         byte = packet[packetIter];
         switch (readState){
