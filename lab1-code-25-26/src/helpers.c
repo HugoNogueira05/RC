@@ -6,6 +6,8 @@
 enum State{ START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, STOP, TIMEOUT };
 enum State UAstate = START;
 
+enum State frameState = START;
+
 
 
 // int openSerialPort(const char *serialPort, int baudRate)
@@ -132,9 +134,25 @@ void UAalarmHandler(int signal)
     UAstate = TIMEOUT;
     return;
 }
-int alarmSetup() {
+int UAalarmSetup() {
     struct sigaction act = {0};
     act.sa_handler = &UAalarmHandler;
+    if (sigaction(SIGALRM, &act, NULL) == -1)
+    {
+        perror("sigaction");
+        return -1;
+    }
+    return 0;
+}
+
+void frameAlarmHandler(){
+    frameState = TIMEOUT;
+    return;
+}
+
+int frameAlarmSetup(){
+    struct sigaction act = {0};
+    act.sa_handler = &frameAlarmHandler;
     if (sigaction(SIGALRM, &act, NULL) == -1)
     {
         perror("sigaction");
@@ -198,7 +216,7 @@ int expectUA(int timeout) {
 }
 
 int initiateSenderProtocol(int timeout, int maxRetries) {
-    if (alarmSetup() < 0) return -1;
+    if (UAalarmSetup() < 0) return -1;
     int tries = 0;
     while (tries < maxRetries) {
         if (sendSupervisionFrame() < 0) return -1;
@@ -214,38 +232,43 @@ int initiateSenderProtocol(int timeout, int maxRetries) {
 }
 
 
-int expectSupervisionFrame(){
-    enum State state = START;
+int expectSupervisionFrame(int timeout, int maxTries){
     unsigned char byte;
-    while(state != STOP){
+    FrameAlarmSetup();
+    alarm(timeout);
+    int tries = 0;
+    while(frameState != STOP || frameState != TIMEOUT || tries < maxTries){
         if(readByteSerialPort(&byte) < 0){
             perror("readByteSerialPort");
             return -1;
         }
         printf("Byte read: %02X\n", byte);
-        switch(state){
+        switch(frameState){
             case START:
-                if(byte == FLAG) state = FLAG_RCV;
+                if(byte == FLAG) frameState = FLAG_RCV;
                 break;
             case FLAG_RCV:
-                if(byte == SENDER_ADDRESS) state = A_RCV;
-                else if(byte != FLAG) state = START;
+                if(byte == SENDER_ADDRESS) frameState = A_RCV;
+                else if(byte != FLAG) frameState = START;
                 break;
             case A_RCV:
-                if(byte == CONTROL_SET) state = C_RCV;
-                else if(byte == FLAG) state = FLAG_RCV;
-                else state = START;
+                if(byte == CONTROL_SET) frameState = C_RCV;
+                else if(byte == FLAG) frameState = FLAG_RCV;
+                else frameState = START;
                 break;
             case C_RCV:
-                if(byte == (SENDER_ADDRESS ^ CONTROL_SET)) state = BCC_OK;
-                else if(byte == FLAG) state = FLAG_RCV;
-                else state = START;
+                if(byte == (SENDER_ADDRESS ^ CONTROL_SET)) frameState = BCC_OK;
+                else if(byte == FLAG) frameState = FLAG_RCV;
+                else frameState = START;
                 break;
             case BCC_OK:
-                if(byte == FLAG) state = STOP;
-                else state = START;
+                if(byte == FLAG) frameState = STOP;
+                else frameState = START;
                 break;
-            default:
+            case TIMEOUT:
+                tries++;
+                printf("Timed out while expecting supervision frame");
+                frameState = START;
                 break;
         }
     }

@@ -5,6 +5,7 @@
 #include "helpers.h"
 
 extern volatile bool frameNumber = FALSE;
+LinkLayer globalLinklayer;
 
 
 // MISC
@@ -15,6 +16,7 @@ extern volatile bool frameNumber = FALSE;
 ////////////////////////////////////////////////
 int llopen(LinkLayer connectionParameters)
 {
+    globalLinklayer = connectionParameters;
     if (connectionParameters.role == LlTx){
         // Transmitter
         if (openSerialPort(connectionParameters.serialPort, connectionParameters.baudRate) < 0)
@@ -73,7 +75,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     unsigned int newSize = generateInformationFrame(buf, frameNumber, bufSize, message);
     frameNumber = !frameNumber;
     int sentBytes = writeBytesSerialPort(message, newSize);
-    if (sentBytes <= 0){
+    if (sentBytes < 0){
         return -1;
     }
     if(waitWriteResponse(frameNumber) == 0){ // 0 if rej , 1 if rr 
@@ -151,15 +153,15 @@ int llread(unsigned char *packet)
 ////////////////////////////////////////////////
 // LLCLOSE        // error handling
 ////////////////////////////////////////////////
-int llclose(LinkLayer & connectionParameters)
+int llclose()
 {
     // TODO: Implement this function
 
-    if (connectionParameters.role == LlRx){
+    if (globalLinklayer.role == LlRx){
         if (expectDISC() < 0){
             perror("expectDISC");
         }
-        if (expectUA(connectionParameters.timeout) < 0){
+        if (expectUA(globalLinklayer.timeout) < 0){
             perror("expectUA");
         }
 
@@ -169,14 +171,14 @@ int llclose(LinkLayer & connectionParameters)
         }
     }
 
-    if (connectionParameters.role == LlTx){
+    if (globalLinklayer.role == LlTx){
         if (sendDisconnect(SENDER_ADDRESS)<0)
             perror("sendDisconnect");
         if (expectDISC()<0)
             perror("expectDISC");
         else {
             unsigned char ua[5] = {FLAG, SENDER_ADDRESS, CONTROL_UA, (unsigned char)(SENDER_ADDRESS^CONTROL_UA), FLAG};
-            if (writeBytesSerialPort(ua) < 0)
+            if (writeBytesSerialPort(ua, 5) < 0)
                 perror("writeBytesSerialPort (UA)");
         }
 
@@ -185,7 +187,7 @@ int llclose(LinkLayer & connectionParameters)
             exit(-1);
         }
 
-        printf("Port %s closed\n", connectionParameters.serialPort);
+        printf("Port %s closed\n", globalLinklayer.serialPort);
     }
 
     return 0;
