@@ -28,8 +28,12 @@ int llopen(LinkLayer connectionParameters)
         printf("Serial port %s opened\n", connectionParameters.serialPort);
 
 
-        initiateSenderProtocol(connectionParameters.timeout , connectionParameters.nRetransmissions);
-        printf("Connection established\n");
+        if(initiateSenderProtocol(connectionParameters.timeout , connectionParameters.nRetransmissions) == 0){
+            printf("Connection established\n");
+        }
+        else{
+            printf("Connection failed\n");
+        }
     } 
     else if (connectionParameters.role == LlRx){
         // Receiver
@@ -59,7 +63,7 @@ int llopen(LinkLayer connectionParameters)
         }
     }
     } 
-
+    printf("returning\n");
     return 0;
 }
 
@@ -78,6 +82,9 @@ int llwrite(const unsigned char *buf, int bufSize)
     if (sentBytes < 0){
         return -1;
     }
+    else{
+        printf("wrote %d bytes to serial port\n", sentBytes);
+    }
     if(waitWriteResponse(frameNumber) == 0){ // 0 if rej , 1 if rr 
         return llwrite(buf, bufSize); // This locks us in an infinite loop until we successfully send the message, maybe switch this to have maxtries?
     }
@@ -94,10 +101,10 @@ int llread(unsigned char *packet)
     enum readState { START, FLAG_RCV, A_RCV, C_RCV , BCC1_OK, DATA_RCV, BCC2_OK, STOP_READ };
     enum readState readState = START;
     unsigned int packetIter = 0;
-    unsigned char* dataBuffer;
+    unsigned char dataBuffer[MAX_PAYLOAD_SIZE];
     int dataBufferIter = 0; 
     unsigned char byte;
-    unsigned int packetSize = strlen(*packet);
+    unsigned int packetSize = strlen((char*)packet);
     while (readState != STOP_READ || packetIter < packetSize){
         byte = packet[packetIter];
         switch (readState){
@@ -114,7 +121,7 @@ int llread(unsigned char *packet)
                 else readState = START;
                 break;
             case C_RCV:
-                if(byte == SENDER_ADDRESS ^INFO_FRAME_0 || byte == SENDER_ADDRESS ^INFO_FRAME_1) readState = BCC1_OK;
+                if(byte == (SENDER_ADDRESS ^INFO_FRAME_0) || byte == (SENDER_ADDRESS ^INFO_FRAME_1)) readState = BCC1_OK;
                 else if(byte == FLAG) readState = FLAG_RCV;
                 else readState = START;
                 break;
@@ -138,13 +145,15 @@ int llread(unsigned char *packet)
                 if(byte == FLAG) readState = STOP_READ;
                 else readState = START;
                 break;
+            case STOP_READ:
+                break;
         packetIter++;
         }
     }
     if (readState != STOP_READ){ //stopped because buffer ran out which means failed
         return -1; // send rej message here or in application layer?
     }
-    unsigned char* finalMessage; 
+    unsigned char* finalMessage = malloc(dataBufferIter); 
     unsigned int finalMessageSize = bytedestuff(dataBuffer, dataBufferIter , finalMessage);
     memcpy(packet, finalMessage, finalMessageSize);
     return finalMessageSize;

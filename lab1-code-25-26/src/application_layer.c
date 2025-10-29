@@ -21,16 +21,18 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     llopen(connectionParameters); // works
     if (strcmp(role,"tx") == 0){
         FILE* file = fopen(filename , "r");
+        printf("opened file\n");
         unsigned char buf [MAX_PAYLOAD_SIZE];
         int read;
-        while(read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE , file)){
-            printf("read %d elements", read);
+        while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE , file))){
+            printf("read %d elements\n", read);
             llwrite(buf, MAX_PAYLOAD_SIZE);
         }
     }
 
-    if (strcmp(role,"rx") == 0){
-        FILE* file = fopen(filename , "w+");
+    // else if(strcmp(role,"rx") == 0){
+    //     FILE* file = fopen(filename , "w+");
+    //     printf("opened file to write");
 
-    }
+    // }
 }

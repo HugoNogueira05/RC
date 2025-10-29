@@ -2,6 +2,7 @@
 #define HELPERS_H
 
 #include "macros.h"
+#include "link_layer.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,5 +51,7 @@ unsigned int bytedestuff(unsigned char* data , unsigned int dataSize , unsigned 
 int sendDisconnect(unsigned char ADD);
 
 int expectDISC();
+
+int expectUA(int timeout);
 
 #endif

@@ -280,7 +280,7 @@ int expectSupervisionFrame(int timeout, int maxTries){
 
 //Generates an information frame and returns its size
 int generateInformationFrame(const unsigned char *data, bool frameNumber, unsigned int size, unsigned char* message){ //framenumber is a bool because it is only between zero and 1 and we can save some bits
-    unsigned char* newData;
+    unsigned char newData [MAX_PAYLOAD_SIZE*2];
     int dataSize = bytestuff(data , newData, size);
     message[0] = FLAG;
     message[1] = SENDER_ADDRESS;
