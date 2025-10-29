@@ -68,6 +68,7 @@ int llopen(LinkLayer connectionParameters)
     } 
     maxTries = connectionParameters.nRetransmissions;
     timeout = connectionParameters.timeout;
+    printf("returning\n");
     return 0;
 }
 
@@ -100,6 +101,8 @@ int llwrite(const unsigned char *buf, int bufSize)
     }
     counter = 1;
     printf("Got response\n");
+        return llwrite(buf, bufSize); // This locks us in an infinite loop until we successfully send the message, maybe switch this to have maxtries?
+    }
     return sentBytes;
 }
 

@@ -11,6 +11,7 @@ int sendCP(unsigned char** message , long fileSize , int open);
 int sendDP(unsigned char** message , long fileSize, unsigned char **fileContent);
 
 
+
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
 {
@@ -27,11 +28,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     llopen(connectionParameters); // works
     if (strcmp(role,"tx") == 0){
         FILE* file = fopen(filename , "r");
-        if(!file){
-            perror("could not open file");
-        }
         int fileSize = getFileSize(file);
-        printf("file size is %d\n", fileSize);
         unsigned char *message = malloc(3+sizeof(fileSize));
         int size= sendCP(&message, fileSize, 1); //send control packet with start information
         if(size >0){
@@ -137,4 +134,31 @@ int getFileSize(FILE *file) {
     long size = ftell(file);
     fseek(file, 0, SEEK_SET);
     return (int)size;
+}
+
+
+int sendCP(unsigned char** message , long fileSize , int open){
+    int index = 0;
+    if(open == 1){
+        (*message)[index++] = 1;
+    }
+    else{
+        (*message)[index++] = 3;
+    }
+    (*message)[index++] = 0;
+    (*message)[index++] = sizeof(fileSize);
+
+    memcpy(&(*message)[index], &fileSize, sizeof(fileSize));
+    index += sizeof(fileSize);
+
+    return index;
+}
+
+int getFileSize(FILE *file) {
+    int size;
+    long currentPos = ftell(file);  
+    fseek(file, 0, SEEK_END);       
+    size = ftell(file);            
+    fseek(file, currentPos, SEEK_SET);
+    return size;
 }
