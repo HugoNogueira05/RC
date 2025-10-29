@@ -104,14 +104,15 @@ int llread(unsigned char *packet)
     unsigned char dataBuffer[MAX_PAYLOAD_SIZE];
     int dataBufferIter = 0; 
     unsigned char byte;
-    unsigned int packetSize = strlen((char*)packet);
-    while (readState != STOP_READ || packetIter < packetSize){
-        byte = packet[packetIter];
+    while (readState != STOP_READ && packetIter < MAX_PAYLOAD_SIZE){
+        readByteSerialPort(byte);
+        printf("got %02x\n" , byte);
         switch (readState){
             case START:
                 if(byte == FLAG) readState = FLAG_RCV;
                 break;
             case FLAG_RCV:
+                printf("read flag\n");
                 if(byte == SENDER_ADDRESS) readState = A_RCV;
                 else if(byte != FLAG) readState = START;
                 break;
@@ -147,8 +148,8 @@ int llread(unsigned char *packet)
                 break;
             case STOP_READ:
                 break;
-        packetIter++;
         }
+        packetIter++;
     }
     if (readState != STOP_READ){ //stopped because buffer ran out which means failed
         return -1; // send rej message here or in application layer?

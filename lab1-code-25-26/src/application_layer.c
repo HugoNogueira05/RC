@@ -6,7 +6,7 @@
 #include <string.h>
 
 int getFileSize(FILE *file);
-int sendCP(unsigned char* message , long fileSize , int open);
+int sendCP(unsigned char** message , long fileSize , int open);
 
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
@@ -27,8 +27,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         FILE* file = fopen(filename , "r");
         int fileSize = getFileSize(file);
         unsigned char message[3 + sizeof(fileSize)];
-        int size;
-        if(size = sendCP(message, fileSize, 1) >0){
+        int size= sendCP(&message, fileSize, 1);
+        if(size >0){
             llwrite(message, size);
             printf("Wrote control packet\n");
         }
@@ -73,7 +73,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 }
 
 
-int sendCP(unsigned char* message , long fileSize , int open){
+int sendCP(unsigned char** message , long fileSize , int open){
     int index = 0;
     if(open == 1){
         message[index++] = 1;
