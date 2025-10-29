@@ -105,7 +105,7 @@ int llread(unsigned char *packet)
     int dataBufferIter = 0; 
     unsigned char byte;
     while (readState != STOP_READ && packetIter < MAX_PAYLOAD_SIZE){
-        readByteSerialPort(byte);
+        readByteSerialPort(&byte);
         printf("got %02x\n" , byte);
         switch (readState){
             case START:

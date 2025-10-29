@@ -4,6 +4,7 @@
 #include "link_layer.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 int getFileSize(FILE *file);
 int sendCP(unsigned char** message , long fileSize , int open);
@@ -26,7 +27,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     if (strcmp(role,"tx") == 0){
         FILE* file = fopen(filename , "r");
         int fileSize = getFileSize(file);
-        unsigned char message[3 + sizeof(fileSize)];
+        unsigned char *message = malloc(3+sizeof(fileSize));
         int size= sendCP(&message, fileSize, 1);
         if(size >0){
             llwrite(message, size);
@@ -76,15 +77,15 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 int sendCP(unsigned char** message , long fileSize , int open){
     int index = 0;
     if(open == 1){
-        message[index++] = 1;
+        *message[index++] = 1;
     }
     else{
-        message[index++] = 3;
+        *message[index++] = 3;
     }
-    message[index++] = 0;
-    message[index++] = sizeof(fileSize);
+    *message[index++] = 0;
+    *message[index++] = sizeof(fileSize);
 
-    memcpy(&message[index], &fileSize, sizeof(fileSize));
+    memcpy(*&message[index], &fileSize, sizeof(fileSize));
     index += sizeof(fileSize);
 
     return index;
