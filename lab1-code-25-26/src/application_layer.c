@@ -28,7 +28,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         FILE* file = fopen(filename , "r");
         int fileSize = getFileSize(file);
         unsigned char *message = malloc(3+sizeof(fileSize));
-        int size= sendCP(&message, fileSize, 1);
+        int size= sendCP(&message, fileSize, 1); //send control packet with start information
         if(size >0){
             llwrite(message, size);
             printf("Wrote control packet\n");
@@ -47,7 +47,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         unsigned char message [MAX_PAYLOAD_SIZE *2];
         enum readState {START, FILE, END};
         enum readState readState = START;
-        unsigned char* packet;
+        unsigned char* packet = malloc(1000);
         unsigned char* startPacket;
         while (readState != END){
             llread(packet);
