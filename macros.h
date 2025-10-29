@@ -1,0 +1,29 @@
+#ifndef   MACROS_H
+#define   MACROS_H
+
+// basic constants
+#define  FALSE   0
+#define  TRUE    1
+
+// frame characters
+#define FLAG 0X7E
+#define SENDER_ADDRESS 0X03
+#define RECEIVER_ACK_ADDRESS 0X03
+#define RECEIVER_ADDRESS 0x01
+#define SENDER_ACK_ADDRESS 0X01
+#define CONTROL_SET 0X03
+#define CONTROL_UA 0X07
+#define INFO_FRAME_0 0X00
+#define INFO_FRAME_1 0x80
+#define RR0 0xAA
+#define REJ0 0x54
+#define CONTROL_DISC 0x0B
+
+// serial port config
+#define _POSIX_SOURCE 1 // POSIX compliant source
+#define BAUDRATE 38400
+#define BUF_SIZE 256
+
+
+
+#endif
