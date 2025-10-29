@@ -2,6 +2,7 @@
 #define HELPERS_H
 
 #include "macros.h"
+#include "link_layer.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,7 @@
 #include <termios.h>
 #include <signal.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 // Open and configure the serial port.
 // Returns -1 on error.
@@ -34,11 +36,26 @@ int sendSupervisionFrame();
 
 int initiateSenderProtocol(int timeout, int maxRetries);
 
-int expectSupervisionFrame();
+int expectSupervisionFrame(int timeout, int maxTries);
 
+int generateInformationFrame(const unsigned char *data, bool frameNumber, unsigned int size, unsigned char* message);
+
+unsigned int bytestuff(const unsigned char *data, unsigned char* stuffedData, unsigned int size);
+
+int calculateBCC2(const unsigned char* data, int dataSize);
+
+bool waitWriteResponse(bool framenum);
+
+unsigned int bytedestuff(unsigned char* data , unsigned int dataSize , unsigned char* newData);
 // Sends a DISC signal from TX or RX
-int sendDisconnect(unsigned char *ADD);
+int sendDisconnect(unsigned char ADD);
 
 int expectDISC();
+
+int expectUA(int timeout);
+
+int sendRej(bool mode);
+
+int sendRR(bool mode);
 
 #endif

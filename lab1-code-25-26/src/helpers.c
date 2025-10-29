@@ -3,8 +3,12 @@
 // int fd = -1;           // File descriptor for open serial port
 // struct termios oldtio; // Serial port settings to restore on closing
 
-enum State{ START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, STOP, TIMEOUT };
+enum State{ START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, TIMEOUT };
 enum State UAstate = START;
+
+enum State frameState = START;
+
+
 
 // int openSerialPort(const char *serialPort, int baudRate)
 // {
@@ -130,9 +134,25 @@ void UAalarmHandler(int signal)
     UAstate = TIMEOUT;
     return;
 }
-int alarmSetup() {
+int UAalarmSetup() {
     struct sigaction act = {0};
     act.sa_handler = &UAalarmHandler;
+    if (sigaction(SIGALRM, &act, NULL) == -1)
+    {
+        perror("sigaction");
+        return -1;
+    }
+    return 0;
+}
+
+void frameAlarmHandler(){
+    frameState = TIMEOUT;
+    return;
+}
+
+int frameAlarmSetup(){
+    struct sigaction act = {0};
+    act.sa_handler = &frameAlarmHandler;
     if (sigaction(SIGALRM, &act, NULL) == -1)
     {
         perror("sigaction");
@@ -148,7 +168,7 @@ int expectUA(int timeout) {
     /*
     Create a state machine to verify the UA frame, if it misses we retransmit the SET frame
     */
-    while (UAstate != STOP) {
+    while (UAstate != TIMEOUT) {
         if (readByteSerialPort(&byte) < 0) {
             perror("readByteSerialPort");
             return -1;
@@ -177,12 +197,8 @@ int expectUA(int timeout) {
             else UAstate = START;
             break;
         case BCC_OK:
-            if (byte == FLAG) UAstate = STOP;
+            if (byte == FLAG) return 0;
             else UAstate = START;
-            break;
-        case STOP:
-            alarm(0); // disable alarm
-            return 0;
             break;
         case TIMEOUT:
             alarm(0); // disable alarm
@@ -196,7 +212,7 @@ int expectUA(int timeout) {
 }
 
 int initiateSenderProtocol(int timeout, int maxRetries) {
-    if (alarmSetup() < 0) return -1;
+    if (UAalarmSetup() < 0) return -1;
     int tries = 0;
     while (tries < maxRetries) {
         if (sendSupervisionFrame() < 0) return -1;
@@ -212,44 +228,176 @@ int initiateSenderProtocol(int timeout, int maxRetries) {
 }
 
 
-int expectSupervisionFrame(){
-    enum State state = START;
+int expectSupervisionFrame(int timeout, int maxTries){
     unsigned char byte;
-    while(state != STOP){
+    frameAlarmSetup();
+    alarm(timeout);
+    int tries = 0;
+    printf("waiting supervision frame");
+    while(frameState != TIMEOUT || tries < maxTries){
         if(readByteSerialPort(&byte) < 0){
             perror("readByteSerialPort");
-            return -1;
         }
         printf("Byte read: %02X\n", byte);
-        switch(state){
+        switch(frameState){
             case START:
-                if(byte == FLAG) state = FLAG_RCV;
+                if(byte == FLAG){ 
+                    frameState = FLAG_RCV;
+                    printf("got flag");
+                }
                 break;
             case FLAG_RCV:
-                if(byte == SENDER_ADDRESS) state = A_RCV;
-                else if(byte != FLAG) state = START;
+                if(byte == SENDER_ADDRESS) frameState = A_RCV;
+                else if(byte != FLAG) frameState = START;
                 break;
             case A_RCV:
-                if(byte == CONTROL_SET) state = C_RCV;
-                else if(byte == FLAG) state = FLAG_RCV;
-                else state = START;
+                if(byte == CONTROL_SET) frameState = C_RCV;
+                else if(byte == FLAG) frameState = FLAG_RCV;
+                else frameState = START;
                 break;
             case C_RCV:
-                if(byte == (SENDER_ADDRESS ^ CONTROL_SET)) state = BCC_OK;
-                else if(byte == FLAG) state = FLAG_RCV;
-                else state = START;
+                if(byte == (SENDER_ADDRESS ^ CONTROL_SET)) {frameState = BCC_OK;printf("got bcc , framestate %d" , frameState);}
+                else if(byte == FLAG) frameState = FLAG_RCV;
+                else frameState = START;
                 break;
             case BCC_OK:
-                if(byte == FLAG) state = STOP;
-                else state = START;
+                if(byte == FLAG) {
+                    alarm(0);
+                    return 0;}
+                else frameState = START;
                 break;
-            default:
+            case TIMEOUT:
+                tries++;
+                alarm(timeout);
+                printf("Timed");
+                frameState = START;
                 break;
         }
     }
     return 0;
 }
 
+
+//Generates an information frame and returns its size
+int generateInformationFrame(const unsigned char *data, bool frameNumber, unsigned int size, unsigned char* message){ //framenumber is a bool because it is only between zero and 1 and we can save some bits
+    unsigned char newData [MAX_PAYLOAD_SIZE*2];
+    int dataSize = bytestuff(data , newData, size);
+    message[0] = FLAG;
+    message[1] = SENDER_ADDRESS;
+    if(frameNumber == 0){
+        message[2] = INFO_FRAME_0;
+    } else {
+        message[2] = INFO_FRAME_1;
+    }
+    message[3] = message[1] ^ message[2];
+    memcpy(&message[4], newData, dataSize);
+    message[4 + dataSize] = calculateBCC2(newData, dataSize);
+    message[5 + dataSize] = FLAG;
+    return 6+dataSize;
+}
+
+unsigned int bytestuff(const unsigned char* data, unsigned char* stuffedData, unsigned int size){
+    int j = 0;
+    for(int i = 0; i < size; i++){
+        if(data[i] == FLAG){ // Swap 0x7E with 0x7D 0x5E
+            stuffedData[j++] = 0x7D;
+            stuffedData[j++] = 0x5E;
+        } else if(data[i] == 0x7D){ //Swap 0x7D with 0x7D 0x5D
+            stuffedData[j++] = 0x7D;
+            stuffedData[j++] = 0x5D;
+        } else {
+            stuffedData[j++] = data[i];
+        }
+    }
+    stuffedData[j] = '\0';
+    return j;
+}
+
+int calculateBCC2(const unsigned char* data, int dataSize){
+    unsigned char bcc2 = 0x00;
+    for(int i = 0; i < dataSize; i++){
+        bcc2 ^= data[i];
+    }
+    return bcc2;
+}
+
+bool waitWriteResponse(bool frameNum){
+    enum responseState {START, FLAG_RCV, A_RCV, CONTROL_RCV, BCC1_OK , END};
+    enum responseState state = START;
+    unsigned char byte;
+    bool rejected;
+    unsigned int messageCounter = 0;
+    while (state != END && messageCounter < 7) //The message size is supposed to be 5 we give 2 of buffer
+    {
+        readByteSerialPort(&byte);
+        printf("%02x\n", byte);
+        messageCounter++;
+        switch (state)
+        {
+        case START:
+            if (byte == FLAG) state = FLAG_RCV;
+            break;
+        case FLAG_RCV:
+            if (byte == RECEIVER_ACK_ADDRESS) state = A_RCV;
+            else if(byte == SENDER_ACK_ADDRESS) state = A_RCV;
+            else if (byte != FLAG) state = START;
+            break;
+        case A_RCV:
+            if (byte == FLAG) state = FLAG_RCV;
+            else if (byte == RR0 + !frameNum) {
+                state = CONTROL_RCV;
+                rejected = false;
+            } 
+            else if (byte == REJ0 +!frameNum){
+                state = CONTROL_RCV;
+                rejected = true;
+            }
+            else{
+                state = START;
+            }
+            break;
+        case CONTROL_RCV:
+            if (byte == FLAG) state = FLAG_RCV;
+            else if (byte == (SENDER_ACK_ADDRESS ^ (rejected ? REJ0+!frameNum : RR0+!frameNum))) state = BCC1_OK;
+            else state = START;
+            break;
+        case BCC1_OK:
+            if (byte == FLAG) state = END;
+            else state = START;
+            break;
+        case END:
+            break;
+        }
+    }
+        if (rejected || messageCounter >= 7){
+            return 0;
+        }
+        return 1;
+}
+
+
+unsigned int bytedestuff(unsigned char* data , unsigned int dataSize , unsigned char* newData){
+    unsigned int j = 0;
+    for (unsigned int i = 0; i < dataSize ; i++){
+        if (data[i] == 0x7D){
+            if (data[i++] == 0x5E){ // convert to 0x7E
+                newData[j] = 0X7E;
+            }
+            else if(data[i++] == 0x5D){ // convert to 0x7D
+                newData[j] = 0x7D;
+            }
+            else{
+                perror("Error in destuffing");
+                exit(-1);
+            }
+        }
+        else{
+            newData[j] = data[i];
+        }
+        j++;
+    }
+    return j;
+}
 int sendDisconnect(unsigned char ADD){
 
     unsigned char disc[5] = {FLAG, ADD, CONTROL_DISC, (unsigned char)(ADD^CONTROL_DISC), FLAG};
@@ -267,7 +415,7 @@ int expectDISC(){
     unsigned char byte;
     unsigned char receivedADD = 0;
 
-    while(state != STOP){
+    while(state != TIMEOUT){
         if(readByteSerialPort(&byte) < 0){
             perror("readByteSerialPort");
             return -1;
@@ -290,17 +438,18 @@ int expectDISC(){
                 else state = START;
                 break;
             case C_RCV:
-                if(byte == receivedADD ^ CONTROL_DISC) state = BCC_OK;
+                if(byte == (receivedADD ^ CONTROL_DISC)) state = BCC_OK;
                 else if(byte == FLAG) state = FLAG_RCV;
                 else state = START;
                 break;
             case BCC_OK:
-                if(byte == FLAG){ state = STOP;
+                if(byte == FLAG){
                     if (receivedADD == SENDER_ADDRESS){
                         if (sendDisconnect(RECEIVER_ADDRESS) < 0){
                             perror("sendDisconnect (RX response)");
                             return -1;
                         }
+                        return 0;
                     }
                 }
                 else state = START;
@@ -311,3 +460,38 @@ int expectDISC(){
     }
     return 0;
 }
+
+
+int sendRej(bool frameNumber){
+    unsigned char message[5];
+       message[0] = FLAG; 
+       message[1] = SENDER_ACK_ADDRESS; 
+       message[2] = REJ0+frameNumber; 
+       message[3] = SENDER_ACK_ADDRESS^(REJ0+frameNumber);
+       message[4] = FLAG;
+
+    int bytes = writeBytesSerialPort(message, 5);
+    if (bytes <= 0)
+    {
+        perror("failed to write rejection frame");
+        return -1;
+    }
+    return bytes;
+};
+
+int sendRR(bool frameNumber){
+    unsigned char message[5];
+       message[0] = FLAG; 
+       message[1] = SENDER_ACK_ADDRESS; 
+       message[2] = RR0+frameNumber; 
+       message[3] = SENDER_ACK_ADDRESS^(RR0+frameNumber);
+       message[4] = FLAG;
+
+    int bytes = writeBytesSerialPort(message, 5);
+    if (bytes <= 0)
+    {
+        perror("failed to write rr frame");
+        return -1;
+    }
+    return bytes;
+};
