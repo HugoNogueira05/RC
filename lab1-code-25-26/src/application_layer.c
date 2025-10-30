@@ -135,30 +135,3 @@ int getFileSize(FILE *file) {
     fseek(file, 0, SEEK_SET);
     return (int)size;
 }
-
-
-int sendCP(unsigned char** message , long fileSize , int open){
-    int index = 0;
-    if(open == 1){
-        (*message)[index++] = 1;
-    }
-    else{
-        (*message)[index++] = 3;
-    }
-    (*message)[index++] = 0;
-    (*message)[index++] = sizeof(fileSize);
-
-    memcpy(&(*message)[index], &fileSize, sizeof(fileSize));
-    index += sizeof(fileSize);
-
-    return index;
-}
-
-int getFileSize(FILE *file) {
-    int size;
-    long currentPos = ftell(file);  
-    fseek(file, 0, SEEK_END);       
-    size = ftell(file);            
-    fseek(file, currentPos, SEEK_SET);
-    return size;
-}
