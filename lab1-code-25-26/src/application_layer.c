@@ -8,6 +8,8 @@
 
 int getFileSize(FILE *file);
 int sendCP(unsigned char** message , long fileSize , int open);
+int sendDP(unsigned char** message , long fileSize, unsigned char **fileContent);
+
 
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
@@ -33,12 +35,27 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             llwrite(message, size);
             printf("Wrote control packet\n");
         }
-        printf("opened file\n");
-        unsigned char buf [MAX_PAYLOAD_SIZE];
+        free(message);
+        unsigned char* buf = malloc(MAX_PAYLOAD_SIZE) ;
+
         int read;
+        if (!buf){
+            perror("buf\n");
+            exit(1);
+        }
+
+        unsigned char *message2 = malloc((MAX_PAYLOAD_SIZE*2)+3);
+        if (!message2) {
+            perror("malloc buf failed");
+            exit(1);
+        }
+
         while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE , file))){
+
+
             printf("read %d elements\n", read);
-            llwrite(buf, MAX_PAYLOAD_SIZE);
+            int size = sendDP(&message2, (long)read , &buf);
+            llwrite(message2, size);
         }
     }
 
@@ -50,27 +67,73 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         unsigned char* packet = malloc(1000);
         unsigned char* startPacket;
         while (readState != END){
-            llread(packet);
-            switch (readState){
-                case START:
-                    if(packet[0] == 1){
-                        readState = FILE;
-                        startPacket = packet+1;
-                        printf("switched readState\n");
-                    }
-                    break;
-                case FILE:
-                    if(packet[0] == 3 && memcmp(packet+1 , startPacket , 2+packet[1])){
-                        readState = END;
-                    }
+            int size = llread(packet);
+            if(size>0){
+                switch (readState){
+                    case START:
+                        if(packet[0] == 1){
+                            readState = FILE;
+                            startPacket = packet+1;
+                            printf("switched readState\n");
+                        }
+                        break;
+                    case FILE:
+                        if(packet[0] == 3 && memcmp(packet+1 , startPacket , 2+packet[1])){
+                            readState = END;
+                        }
 
+                }
             }
+        
         }
 
         llread(message);
         printf("opened file to write\n");
 
     }
+}
+
+
+int sendCP(unsigned char** message , long fileSize , int open){
+    int index = 0;
+    if(open == 1){
+        (*message)[index++] = 1;
+    }
+    else{
+        (*message)[index++] = 3;
+    }
+    (*message)[index++] = 0;
+    (*message)[index++] = sizeof(fileSize);
+
+    memcpy(&(*message)[index], &fileSize, sizeof(fileSize));
+    index += sizeof(fileSize);
+
+    return index;
+}
+
+int sendDP(unsigned char** message , long fileSize, unsigned char **fileContent){
+    int index = 0;
+    (*message)[index++] = 2;
+
+
+    memcpy(&(*message)[index], &fileSize, 2);
+
+    index+=2;
+    memcpy(&(*message)[index], *fileContent, fileSize);
+    index += fileSize;
+
+
+    return index;
+}
+
+
+
+
+int getFileSize(FILE *file) {
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    return (int)size;
 }
 
 

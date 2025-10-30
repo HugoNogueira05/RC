@@ -15,8 +15,8 @@
 #define CONTROL_UA 0X07
 #define INFO_FRAME_0 0X00
 #define INFO_FRAME_1 0x80
-#define RR 0xAA
-#define REJ 0x54
+#define RR0 0xAA
+#define REJ0 0x54
 #define CONTROL_DISC 0x0B
 
 // serial port config

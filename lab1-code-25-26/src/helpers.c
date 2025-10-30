@@ -327,9 +327,10 @@ bool waitWriteResponse(bool frameNum){
     unsigned char byte;
     bool rejected;
     unsigned int messageCounter = 0;
-    while (state != END || messageCounter < 7) //The message size is supposed to be 5 we give 2 of buffer
+    while (state != END && messageCounter < 7) //The message size is supposed to be 5 we give 2 of buffer
     {
         readByteSerialPort(&byte);
+        printf("%02x\n", byte);
         messageCounter++;
         switch (state)
         {
@@ -338,15 +339,16 @@ bool waitWriteResponse(bool frameNum){
             break;
         case FLAG_RCV:
             if (byte == RECEIVER_ACK_ADDRESS) state = A_RCV;
+            else if(byte == SENDER_ACK_ADDRESS) state = A_RCV;
             else if (byte != FLAG) state = START;
             break;
         case A_RCV:
             if (byte == FLAG) state = FLAG_RCV;
-            else if (byte == RR + frameNum) {
+            else if (byte == RR0 + !frameNum) {
                 state = CONTROL_RCV;
                 rejected = false;
             } 
-            else if (byte == REJ +frameNum){
+            else if (byte == REJ0 +!frameNum){
                 state = CONTROL_RCV;
                 rejected = true;
             }
@@ -356,7 +358,7 @@ bool waitWriteResponse(bool frameNum){
             break;
         case CONTROL_RCV:
             if (byte == FLAG) state = FLAG_RCV;
-            else if (byte == (SENDER_ACK_ADDRESS ^ rejected) ? REJ+frameNum : RR+frameNum) state = BCC1_OK;
+            else if (byte == (SENDER_ACK_ADDRESS ^ (rejected ? REJ0+!frameNum : RR0+!frameNum))) state = BCC1_OK;
             else state = START;
             break;
         case BCC1_OK:
@@ -458,3 +460,38 @@ int expectDISC(){
     }
     return 0;
 }
+
+
+int sendRej(bool frameNumber){
+    unsigned char message[5];
+       message[0] = FLAG; 
+       message[1] = SENDER_ACK_ADDRESS; 
+       message[2] = REJ0+frameNumber; 
+       message[3] = SENDER_ACK_ADDRESS^(REJ0+frameNumber);
+       message[4] = FLAG;
+
+    int bytes = writeBytesSerialPort(message, 5);
+    if (bytes <= 0)
+    {
+        perror("failed to write rejection frame");
+        return -1;
+    }
+    return bytes;
+};
+
+int sendRR(bool frameNumber){
+    unsigned char message[5];
+       message[0] = FLAG; 
+       message[1] = SENDER_ACK_ADDRESS; 
+       message[2] = RR0+frameNumber; 
+       message[3] = SENDER_ACK_ADDRESS^(RR0+frameNumber);
+       message[4] = FLAG;
+
+    int bytes = writeBytesSerialPort(message, 5);
+    if (bytes <= 0)
+    {
+        perror("failed to write rr frame");
+        return -1;
+    }
+    return bytes;
+};

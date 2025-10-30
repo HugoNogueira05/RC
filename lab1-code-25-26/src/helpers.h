@@ -54,4 +54,8 @@ int expectDISC();
 
 int expectUA(int timeout);
 
+int sendRej(bool mode);
+
+int sendRR(bool mode);
+
 #endif

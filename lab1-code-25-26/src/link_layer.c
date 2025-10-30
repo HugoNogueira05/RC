@@ -5,6 +5,9 @@
 #include "helpers.h"
 
 volatile bool frameNumber = FALSE;
+int maxTries ;
+int timeout;
+int counter =1;
 LinkLayer globalLinklayer;
 
 
@@ -63,6 +66,8 @@ int llopen(LinkLayer connectionParameters)
         }
     }
     } 
+    maxTries = connectionParameters.nRetransmissions;
+    timeout = connectionParameters.timeout;
     printf("returning\n");
     return 0;
 }
@@ -86,6 +91,16 @@ int llwrite(const unsigned char *buf, int bufSize)
         printf("wrote %d bytes to serial port\n", sentBytes);
     }
     if(waitWriteResponse(frameNumber) == 0){ // 0 if rej , 1 if rr 
+        if(counter > maxTries){
+            printf("Exceeded maximum number of retransmissions\n");
+            return -1;
+        }
+        counter++;
+
+        return llwrite(buf, bufSize);
+    }
+    counter = 1;
+    printf("Got response\n");
         return llwrite(buf, bufSize); // This locks us in an infinite loop until we successfully send the message, maybe switch this to have maxtries?
     }
     return sentBytes;
@@ -152,12 +167,16 @@ int llread(unsigned char *packet)
         packetIter++;
     }
     if (readState != STOP_READ){ //stopped because buffer ran out which means failed
-        return -1; // send rej message here or in application layer?
+        sendRej(frameNumber);
+        return 0; // send rej message here or in application layer?
+    }  else {
+        sendRR(frameNumber);
+        unsigned char* finalMessage = malloc(dataBufferIter); 
+        unsigned int finalMessageSize = bytedestuff(dataBuffer, dataBufferIter , finalMessage);
+        memcpy(packet, finalMessage, finalMessageSize);
+        return finalMessageSize;
     }
-    unsigned char* finalMessage = malloc(dataBufferIter); 
-    unsigned int finalMessageSize = bytedestuff(dataBuffer, dataBufferIter , finalMessage);
-    memcpy(packet, finalMessage, finalMessageSize);
-    return finalMessageSize;
+
 }
 
 ////////////////////////////////////////////////
