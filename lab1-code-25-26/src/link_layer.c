@@ -211,6 +211,7 @@ int llread(unsigned char *packet)
         printf("finalMessageSize=%d\n", finalMessageSize);
         dataBufferIter = 0;
         sendRR(frameNumber);
+        frameNumber = !frameNumber;
         return (int)finalMessageSize;
     }
 }
@@ -226,14 +227,17 @@ int llclose()
         if (expectDISC() < 0){
             perror("expectDISC");
         }
+        printf("wrote expectDisc\n");
         if (expectUA(globalLinklayer.timeout) < 0){
             perror("expectUA");
         }
+        printf("print UA\n");
 
         if (closeSerialPort()<0){
             perror("closeSerialPort\n");
             exit(-1);
         }
+        printf("closed serial\n");
     }
 
     if (globalLinklayer.role == LlTx){
