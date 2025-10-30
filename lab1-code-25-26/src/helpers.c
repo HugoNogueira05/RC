@@ -376,25 +376,31 @@ bool waitWriteResponse(bool frameNum){
 }
 
 
-unsigned int bytedestuff(unsigned char* data , unsigned int dataSize , unsigned char* newData){
+////////////////////////////////////////////////
+// BYTEDESTUFF
+////////////////////////////////////////////////
+unsigned int bytedestuff(unsigned char *data, unsigned int dataSize, unsigned char *newData) {
     unsigned int j = 0;
-    for (unsigned int i = 0; i < dataSize ; i++){
-        if (data[i] == 0x7D){
-            if (data[i++] == 0x5E){ // convert to 0x7E
-                newData[j] = 0X7E;
-            }
-            else if(data[i++] == 0x5D){ // convert to 0x7D
-                newData[j] = 0x7D;
-            }
-            else{
-                perror("Error in destuffing");
-                exit(-1);
-            }
+    for (unsigned int i = 0; i < dataSize; i++) {
+        if (j >= 1200) { // Prevent buffer overflow
+            fprintf(stderr, "Error: Destuffed data exceeds packet buffer size\n");
+            return 0; // Indicate an error
         }
-        else{
-            newData[j] = data[i];
+        if (data[i] == 0x7D) {
+            i++; // move to the next byte safely
+            if (i >= dataSize) {
+                fprintf(stderr, "Error in destuffing: unexpected end\n");
+                return 0; // Indicate an error
+            }
+            if (data[i] == 0x5E) newData[j++] = 0x7E;
+            else if (data[i] == 0x5D) newData[j++] = 0x7D;
+            else {
+                fprintf(stderr, "Error in destuffing: invalid escape\n");
+                return 0; // Indicate an error
+            }
+        } else {
+            newData[j++] = data[i];
         }
-        j++;
     }
     return j;
 }
@@ -476,6 +482,7 @@ int sendRej(bool frameNumber){
         perror("failed to write rejection frame");
         return -1;
     }
+    printf("Reject frame %d\n" , frameNumber);
     return bytes;
 };
 
@@ -493,5 +500,6 @@ int sendRR(bool frameNumber){
         perror("failed to write rr frame");
         return -1;
     }
+    printf("Accepted frame %d\n", frameNumber);
     return bytes;
 };

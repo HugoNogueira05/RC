@@ -111,15 +111,15 @@ int llwrite(const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 int llread(unsigned char *packet)
 {   
-    enum readState { START, FLAG_RCV, A_RCV, C_RCV , BCC1_OK, DATA_RCV, BCC2_OK, STOP_READ };
+    enum readState { START, FLAG_RCV, A_RCV, C_RCV , BCC1_OK, DATA_RCV, STOP_READ };
     enum readState readState = START;
     unsigned int packetIter = 0;
     unsigned char dataBuffer[MAX_PAYLOAD_SIZE];
     int dataBufferIter = 0; 
     unsigned char byte;
-    while (readState != STOP_READ && packetIter < MAX_PAYLOAD_SIZE){
+    while (readState != STOP_READ && packetIter < MAX_PAYLOAD_SIZE+15){
         readByteSerialPort(&byte);
-        printf("got %02x\n" , byte);
+        // printf("got %02x\n" , byte);
         switch (readState){
             case START:
                 if(byte == FLAG) readState = FLAG_RCV;
@@ -130,16 +130,19 @@ int llread(unsigned char *packet)
                 else if(byte != FLAG) readState = START;
                 break;
             case A_RCV: // Como saber se o number frame é o correto?
+                printf("got address\n");
                 if (byte == INFO_FRAME_0 || byte == INFO_FRAME_1) readState = C_RCV;
                 else if(byte == FLAG) readState = FLAG_RCV;
                 else readState = START;
                 break;
             case C_RCV:
+                printf("got control\n");
                 if(byte == (SENDER_ADDRESS ^INFO_FRAME_0) || byte == (SENDER_ADDRESS ^INFO_FRAME_1)) readState = BCC1_OK;
                 else if(byte == FLAG) readState = FLAG_RCV;
                 else readState = START;
                 break;
             case BCC1_OK:
+                printf("bcc1 is ok\n");
                 if(byte == FLAG) readState = FLAG_RCV;
                 else {
                     dataBuffer[dataBufferIter] = byte;
@@ -148,33 +151,68 @@ int llread(unsigned char *packet)
                 }
                 break;
             case DATA_RCV:
-                if(byte == calculateBCC2(dataBuffer, dataBufferIter)) readState = BCC2_OK;
-                else if (byte == FLAG) readState = FLAG_RCV;
+            // printf("getting data %02x \n", byte);
+                if (byte == FLAG){ 
+                    // if (calculateBCC2(dataBuffer , dataBufferIter-1) == dataBuffer[dataBufferIter-1]){
+                    //     readState = STOP_READ;
+                    // }
+                    // else{
+                    //     printf("bcc2 is wrong, rejecting\n");
+                    //     printf("BCC2 check: XORing %d bytes\n", dataBufferIter - 1);
+                    //     for (int i = 0; i < dataBufferIter - 1; i++) printf("%02X ", dataBuffer[i]);
+                    //     printf("\nExpected BCC2: %02X\n", dataBuffer[dataBufferIter - 1]);
+                    //     printf("Calculated BCC2: %02X\n", calculateBCC2(dataBuffer, dataBufferIter - 1));
+                    //     readState = START;
+                    //     dataBufferIter = 0;
+                    //     memset(dataBuffer, 0, sizeof(dataBuffer));
+                    // }
+                    readState = STOP_READ;
+                }
                 else {
                     dataBuffer[dataBufferIter] = byte;
                     dataBufferIter++;
                 }
                 break;
-            case BCC2_OK:
-                if(byte == FLAG) readState = STOP_READ;
-                else readState = START;
-                break;
+            // case BCC2_OK:
+            //     printf ("got %02x\n",byte );
+            //     printf("got data and bcc2 is ok\n");
+            //     if(byte == FLAG) {
+            //         readState = STOP_READ;
+            //         printf("got final falg\n");
+            //         }
+            //     else readState = START;
+            //     break;
             case STOP_READ:
+                printf("stopping\n");
                 break;
         }
         packetIter++;
     }
-    if (readState != STOP_READ){ //stopped because buffer ran out which means failed
+    if (readState != STOP_READ) { // stopped because buffer ran out which means failed
         sendRej(frameNumber);
         return 0; // send rej message here or in application layer?
-    }  else {
-        sendRR(frameNumber);
-        unsigned char* finalMessage = malloc(dataBufferIter); 
-        unsigned int finalMessageSize = bytedestuff(dataBuffer, dataBufferIter , finalMessage);
-        memcpy(packet, finalMessage, finalMessageSize);
-        return finalMessageSize;
-    }
+    } else {
 
+        // Ensure the destuffed data fits within the packet buffer
+        if (dataBufferIter - 4 > MAX_PAYLOAD_SIZE) {
+            fprintf(stderr, "Error: Destuffed data exceeds MAX_PAYLOAD_SIZE\n");
+            sendRej(frameNumber);
+            return -1; // Indicate an error
+        }
+
+        unsigned int finalMessageSize = bytedestuff(dataBuffer , dataBufferIter , packet);
+        if (finalMessageSize > 1200) { // Check against packet buffer size
+            fprintf(stderr, "Error: finalMessageSize exceeds packet buffer size\n");
+            sendRej(frameNumber);
+            return -1; // Indicate an error
+        }
+
+        printf("destuffed\n");
+        printf("finalMessageSize=%d\n", finalMessageSize);
+        dataBufferIter = 0;
+        sendRR(frameNumber);
+        return (int)finalMessageSize;
+    }
 }
 
 ////////////////////////////////////////////////
@@ -219,3 +257,5 @@ int llclose()
 
     return 0;
 }
+
+

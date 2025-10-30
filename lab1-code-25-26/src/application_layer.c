@@ -26,6 +26,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     else if (strcmp(role, "rx") == 0)
         connectionParameters.role = LlRx;
     llopen(connectionParameters); // works
+
     if (strcmp(role,"tx") == 0){
         FILE* file = fopen(filename , "r");
         int fileSize = getFileSize(file);
@@ -58,16 +59,18 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             llwrite(message2, size);
         }
     }
-
     else if(strcmp(role,"rx") == 0){
-        FILE* file = fopen(filename , "w+");
+        printf("Receiver Logic\n");
+        FILE* file = fopen(filename , "w");
         unsigned char message [MAX_PAYLOAD_SIZE *2];
         enum readState {START, FILE, END};
         enum readState readState = START;
-        unsigned char* packet = malloc(1000);
+        unsigned char* packet = malloc(1200);
         unsigned char* startPacket;
         while (readState != END){
             int size = llread(packet);
+            printf("got %d bytes\n", size);
+            printf("readstate is %d\n", readState);
             if(size>0){
                 switch (readState){
                     case START:
@@ -81,13 +84,24 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                         if(packet[0] == 3 && memcmp(packet+1 , startPacket , 2+packet[1])){
                             readState = END;
                         }
+                        else{
+                            printf("got data\n");
+                            printf("size is %d\n", size);
+                            if (!file){
+                                perror("file\n");
+                                exit(1);
+                            }
+                            printf("writing to file\n");
+                            int written = fwrite(packet+3, sizeof(unsigned char),size-4 , file);
+                            fflush(file);
+                            printf("Wrote %d bytes to penguin\n", written);
+                        }
+                        break;
 
                 }
             }
         
         }
-
-        llread(message);
         printf("opened file to write\n");
 
     }
