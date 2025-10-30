@@ -51,7 +51,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             exit(1);
         }
 
-        while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE , file))){
+        while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE-200, file))){
 
 
             printf("read %d elements\n", read);
@@ -81,8 +81,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                         }
                         break;
                     case FILE:
-                        if(packet[0] == 3 && memcmp(packet+1 , startPacket , 2+packet[1])){
+                    printf("packet[0]: %d\n", packet[0]);
+                        if(packet[0] == 3 || memcmp(packet+1 , startPacket , 2)){
                             readState = END;
+                            printf("got disc\n");
                         }
                         else{
                             printf("got data\n");
@@ -97,11 +99,13 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                             printf("Wrote %d bytes to penguin\n", written);
                         }
                         break;
+                    case END:
 
                 }
             }
         
         }
+        llclose();
         printf("opened file to write\n");
 
     }
