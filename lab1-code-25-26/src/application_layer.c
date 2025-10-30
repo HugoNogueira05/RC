@@ -25,7 +25,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         connectionParameters.role = LlTx;
     else if (strcmp(role, "rx") == 0)
         connectionParameters.role = LlRx;
-    llopen(connectionParameters); // works
+    if(llopen(connectionParameters) == -1){
+        perror("llopen\n");
+        exit(1);
+    } // works
 
     if (strcmp(role,"tx") == 0){
         FILE* file = fopen(filename , "r");
@@ -36,7 +39,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             llwrite(message, size);
             printf("Wrote control packet\n");
         }
-        free(message);
         unsigned char* buf = malloc(MAX_PAYLOAD_SIZE) ;
 
         int read;
@@ -51,12 +53,19 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             exit(1);
         }
 
-        while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE , file))){
+        while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE -200, file))){
 
 
             printf("read %d elements\n", read);
             int size = sendDP(&message2, (long)read , &buf);
             llwrite(message2, size);
+            printf("wrote succesfully\n");
+        }
+        size = sendCP(&message, fileSize, 0);
+        if(size > 0){
+            llwrite(message, size);
+            printf("Wrote control packet to disconnect\n");
+            llclose();
         }
     }
     else if(strcmp(role,"rx") == 0){

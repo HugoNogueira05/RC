@@ -338,17 +338,20 @@ bool waitWriteResponse(bool frameNum){
             if (byte == FLAG) state = FLAG_RCV;
             break;
         case FLAG_RCV:
+        printf("got flag\n");
             if (byte == RECEIVER_ACK_ADDRESS) state = A_RCV;
             else if(byte == SENDER_ACK_ADDRESS) state = A_RCV;
             else if (byte != FLAG) state = START;
             break;
         case A_RCV:
+        printf("got addrss\n");
+        printf("framenumber is %d\n", frameNum);
             if (byte == FLAG) state = FLAG_RCV;
-            else if (byte == RR0 + !frameNum) {
+            else if (byte == RR0 + frameNum) {
                 state = CONTROL_RCV;
                 rejected = false;
             } 
-            else if (byte == REJ0 +!frameNum){
+            else if (byte == REJ0 +frameNum){
                 state = CONTROL_RCV;
                 rejected = true;
             }
@@ -357,11 +360,13 @@ bool waitWriteResponse(bool frameNum){
             }
             break;
         case CONTROL_RCV:
+        printf("got control\n");
             if (byte == FLAG) state = FLAG_RCV;
-            else if (byte == (SENDER_ACK_ADDRESS ^ (rejected ? REJ0+!frameNum : RR0+!frameNum))) state = BCC1_OK;
+            else if (byte == (SENDER_ACK_ADDRESS ^ (rejected ? REJ0+frameNum : RR0+frameNum))) state = BCC1_OK;
             else state = START;
             break;
         case BCC1_OK:
+        printf("bcc1_ok\n");
             if (byte == FLAG) state = END;
             else state = START;
             break;
@@ -455,6 +460,9 @@ int expectDISC(){
                             perror("sendDisconnect (RX response)");
                             return -1;
                         }
+                        return 0;
+                    }
+                    else{
                         return 0;
                     }
                 }

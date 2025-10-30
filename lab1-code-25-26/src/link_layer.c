@@ -36,6 +36,7 @@ int llopen(LinkLayer connectionParameters)
         }
         else{
             printf("Connection failed\n");
+            return -1;
         }
     } 
     else if (connectionParameters.role == LlRx){
@@ -80,7 +81,7 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
-    unsigned char message[BUF_SIZE]; // we assume that BUF_SIZE is at least double the maxsize of bufSize in case of worst case bytestuffing
+    unsigned char message[1000]; // we assume that BUF_SIZE is at least double the maxsize of bufSize in case of worst case bytestuffing
     unsigned int newSize = generateInformationFrame(buf, frameNumber, bufSize, message);
     frameNumber = !frameNumber;
     int sentBytes = writeBytesSerialPort(message, newSize);
@@ -90,7 +91,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     else{
         printf("wrote %d bytes to serial port\n", sentBytes);
     }
-    if(waitWriteResponse(frameNumber) == 0){ // 0 if rej , 1 if rr 
+    if(waitWriteResponse(!frameNumber) == 0){ // 0 if rej , 1 if rr 
         if(counter > maxTries){
             printf("Exceeded maximum number of retransmissions\n");
             return -1;
@@ -189,28 +190,28 @@ int llread(unsigned char *packet)
         packetIter++;
     }
     if (readState != STOP_READ) { // stopped because buffer ran out which means failed
-        sendRej(frameNumber);
+        sendRej(!frameNumber);
         return 0; // send rej message here or in application layer?
     } else {
 
         // Ensure the destuffed data fits within the packet buffer
         if (dataBufferIter - 4 > MAX_PAYLOAD_SIZE) {
             fprintf(stderr, "Error: Destuffed data exceeds MAX_PAYLOAD_SIZE\n");
-            sendRej(frameNumber);
+            sendRej(!frameNumber);
             return -1; // Indicate an error
         }
 
         unsigned int finalMessageSize = bytedestuff(dataBuffer , dataBufferIter , packet);
         if (finalMessageSize > 1200) { // Check against packet buffer size
             fprintf(stderr, "Error: finalMessageSize exceeds packet buffer size\n");
-            sendRej(frameNumber);
+            sendRej(!frameNumber);
             return -1; // Indicate an error
         }
 
         printf("destuffed\n");
         printf("finalMessageSize=%d\n", finalMessageSize);
         dataBufferIter = 0;
-        sendRR(frameNumber);
+        sendRR(!frameNumber);
         return (int)finalMessageSize;
     }
 }
@@ -226,10 +227,11 @@ int llclose()
         if (expectDISC() < 0){
             perror("expectDISC");
         }
+        printf("got disc\n");
         if (expectUA(globalLinklayer.timeout) < 0){
             perror("expectUA");
         }
-
+        printf("got ua\n");
         if (closeSerialPort()<0){
             perror("closeSerialPort\n");
             exit(-1);
@@ -239,12 +241,14 @@ int llclose()
     if (globalLinklayer.role == LlTx){
         if (sendDisconnect(SENDER_ADDRESS)<0)
             perror("sendDisconnect");
+        printf("sent disc\n");
         if (expectDISC()<0)
             perror("expectDISC");
         else {
             unsigned char ua[5] = {FLAG, SENDER_ADDRESS, CONTROL_UA, (unsigned char)(SENDER_ADDRESS^CONTROL_UA), FLAG};
             if (writeBytesSerialPort(ua, 5) < 0)
                 perror("writeBytesSerialPort (UA)");
+            printf("wrote ua\n");\
         }
 
         if (closeSerialPort() < 0){
