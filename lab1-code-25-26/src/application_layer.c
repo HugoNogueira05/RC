@@ -53,7 +53,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             exit(1);
         }
 
-        while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE, file))){
+        while((read = fread(buf, sizeof(unsigned char) , MAX_PAYLOAD_SIZE-50, file))){
 
 
             printf("read %d elements\n", read);
